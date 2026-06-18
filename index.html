@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Калькулятор продукции</title>
+<style>
+*{box-sizing:border-box}
+body{font-family:'Segoe UI',Arial,sans-serif;background:#f2f2f0;max-width:1100px;margin:auto;padding:20px}
+h1{margin-top:0;font-weight:500;color:#1e1e1e}
+.card{background:#fff;border:1px solid #ddd;border-radius:14px;padding:18px 22px;margin-bottom:16px;box-shadow:0 2px 6px rgba(0,0,0,0.03)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;align-items:end}
+label{display:block;font-size:13px;font-weight:600;color:#444;margin-bottom:4px}
+select,input{width:100%;padding:11px 12px;border:1px solid #ccc;border-radius:10px;font-size:15px;background:#fafafa}
+select:focus,input:focus{border-color:#6c5ce7;outline:none;background:#fff}
+.result{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+.metric{background:#f0effb;border-radius:14px;padding:18px 22px}
+.metric div:first-child{font-size:14px;color:#444}
+.big{font-size:34px;font-weight:700;color:#2d2b4e;margin-top:4px}
+table{width:100%;border-collapse:collapse}
+th,td{padding:8px 6px;border-bottom:1px solid #eee;text-align:left}
+th{font-weight:600;color:#555}
+.small{color:#666;font-size:13px;margin-top:6px}
+.gray{color:#888;font-style:italic}
+</style>
+</head>
+<body>
+<h1>🧮 Калькулятор продукции</h1>
+
+<div class="card">
+<label>Вид продукции</label>
+<select id="product"></select>
+</div>
+
+<div class="card" id="controls"></div>
+
+<div class="result">
+<div class="metric"><div>Цена за 1 шт</div><div class="big" id="unit">—</div></div>
+<div class="metric"><div>Сумма заказа</div><div class="big" id="total">—</div></div>
+</div>
+
+<div class="card">
+<div id="hint" class="small"></div>
+<table>
+<thead><tr><th>Тираж</th><th>Цена, грн</th></tr></thead>
+<tbody id="tbody"></tbody>
+</table>
+</div>
+
+<script>
+// ---------- СПРАВОЧНИКИ ----------
+const products = {
+  badges: 'Травлёные значки',
+  keychains: 'Травлёные брелоки',
+  poly: 'Полиграфические значки',
+  pvc: 'Шевроны ПВХ',
+  emb: 'Шевроны вышитые',
+  sub: 'Шевроны сублимация',
+  callsign: 'Позывные вышитые',
+  card: 'Картонка односторонняя'
+};
+
+// ---- Травлёные значки (полный прайс) ----
+const badges = {
+  "3": {
+    nickel: {1:1000, 10:215, 20:130, 30:105, 50:80, 100:76, 150:72, 200:68, 300:62, 500:61, 1000:59},
+    gold:   {1:1000, 10:298, 20:195, 30:183, 50:148, 100:140, 150:133, 200:129, 300:123, 500:118, 1000:113}
+  },
+  "6": {
+    nickel: {1:1000, 10:215, 20:130, 30:105, 50:83, 100:79, 150:75, 200:71, 300:65, 500:64, 1000:62},
+    gold:   {1:1000, 10:298, 20:195, 30:183, 50:154, 100:146, 150:138, 200:134, 300:128, 500:123, 1000:117}
+  },
+  "9": {
+    nickel: {1:1000, 10:215, 20:130, 30:105, 50:85, 100:81, 150:77, 200:72, 300:67, 500:66, 1000:64},
+    gold:   {1:1000, 10:298, 20:195, 30:183, 50:163, 100:154, 150:146, 200:142, 300:136, 500:130, 1000:124}
+  }
+};
+
+// ---- Травлёные брелоки (полный прайс по размерам и сторонам) ----
+const keychains = {
+  // односторонние
+  one: {
+    "6": {
+      nickel: {1:1310, 10:235, 30:121, 50:125, 100:121, 200:112, 300:104},
+      gold:   {1:1500, 10:375, 30:213, 50:204, 100:190.5, 200:177, 300:163.5}
+    },
+    "9": {
+      nickel: {1:1310, 10:266, 30:138, 50:133, 100:131, 200:118, 300:109},
+      gold:   {1:1500, 10:420, 30:240, 50:235.5, 100:229.5, 200:214.5, 300:207}
+    },
+    "15": {
+      nickel: {1:1310, 10:306, 30:170, 50:164, 100:157, 200:145, 300:139},
+      gold:   {1:1500, 10:510, 30:334.5, 50:325.5, 100:318, 200:295.5, 300:280.5}
+    },
+    "20": {
+      nickel: {1:1310, 10:317, 30:204, 50:199, 100:194, 200:183, 300:171},
+      gold:   {1:1500, 10:525, 30:414, 50:393, 100:382.5, 200:360, 300:333}
+    }
+  },
+  // двусторонние
+  two: {
+    "6": {
+      nickel: {1:1310, 10:245, 30:138, 50:128, 100:123, 200:115, 300:110},
+      gold:   {1:1500, 10:375, 30:247.5, 50:216, 100:202.5, 200:183, 300:171}
+    },
+    "9": {
+      nickel: {1:1310, 10:276, 30:168, 50:150, 100:143, 200:135, 300:125},
+      gold:   {1:1500, 10:435, 30:300, 50:286.5, 100:279, 200:258, 300:244.5}
+    },
+    "15": {
+      nickel: {1:1310, 10:317, 30:210, 50:205, 100:199, 200:181, 300:175},
+      gold:   {1:1500, 10:525, 30:379.5, 50:370.5, 100:360, 200:346.5, 300:330}
+    },
+    "20": {
+      nickel: {1:1310, 10:327, 30:243, 50:238, 100:231, 200:211, 300:200},
+      gold:   {1:1500, 10:540, 30:423, 50:411, 100:402, 200:376.5, 300:357}
+    }
+  }
+};
+
+// ---- Простые товары (шевроны, картонка) ----
+const simple = {
+  emb:      {10:180, 20:150, 30:140, 40:130, 50:120, 100:95},
+  sub:      {20:150, 30:140, 50:120, 80:110, 100:95},
+  callsign: {3:150},
+  card:     {50:35, 100:30, 200:27, 300:25, 500:22.5, 1000:19.5}
+};
+
+// ---- Полиграф. значки (диапазон) ----
+const polyPrices = {
+  "36": {50:40, 100:26, 200:24, 300:22, 500:21, 1000:20, 2000:19, 5000:18, 10000:16},
+  "43": {50:40, 100:28, 200:26, 300:24, 500:23, 1000:22, 2000:21, 5000:20, 10000:18},
+  "56": {50:40, 100:30, 200:28, 300:26, 500:25, 1000:24, 2000:23, 5000:22, 10000:19}
+};
+
+// ---- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ----
+function getStep(map, qty) {
+  const keys = Object.keys(map).map(Number).sort((a,b)=>a-b);
+  let step = keys[0];
+  keys.forEach(k => { if (k <= qty) step = k; });
+  return step;
+}
+
+function fillTable(map) {
+  const tbody = document.getElementById('tbody');
+  tbody.innerHTML = '';
+  Object.entries(map).forEach(([k,v]) => {
+    tbody.innerHTML += `<tr><td>${k}</td><td>${v} грн</td></tr>`;
+  });
+}
+
+// ---- ПОСТРОЕНИЕ ИНТЕРФЕЙСА ----
+const p = document.getElementById('product');
+Object.entries(products).forEach(([k,v]) => {
+  let o = document.createElement('option');
+  o.value = k; o.textContent = v; p.appendChild(o);
+});
+
+function buildControls() {
+  const type = p.value;
+  let html = '';
+  if (type === 'badges') {
+    html = `<div class="grid">
+      <div><label>Размер</label><select id="size"><option value="3">до 3 см²</option><option value="6">до 6 см²</option><option value="9" selected>до 9 см²</option></select></div>
+      <div><label>Покрытие</label><select id="coat"><option value="nickel">Никель</option><option value="gold">Золото</option></select></div>
+      <div><label>Количество</label><input id="qty" type="number" value="150"></div>
+    </div>`;
+  } else if (type === 'keychains') {
+    html = `<div class="grid">
+      <div><label>Сторона</label><select id="side"><option value="one">1 сторона</option><option value="two">2 стороны</option></select></div>
+      <div><label>Размер</label><select id="size"><option value="6">до 6 см²</option><option value="9" selected>до 9 см²</option><option value="15">до 15 см²</option><option value="20">до 20 см²</option></select></div>
+      <div><label>Покрытие</label><select id="coat"><option value="nickel">Никель</option><option value="gold">Золото</option></select></div>
+      <div><label>Количество</label><input id="qty" type="number" value="300"></div>
+    </div>`;
+  } else if (type === 'poly') {
+    html = `<div class="grid">
+      <div><label>Диаметр</label><select id="size"><option value="36">36 мм</option><option value="43" selected>43 мм</option><option value="56">56 мм</option></select></div>
+      <div><label>Количество</label><input id="qty" type="number" value="1000"></div>
+    </div>`;
+  } else {
+    html = `<div class="grid"><div><label>Количество</label><input id="qty" type="number" value="100"></div></div>`;
+  }
+  document.getElementById('controls').innerHTML = html;
+  document.querySelectorAll('#controls input, #controls select').forEach(el => {
+    el.addEventListener('input', calc);
+  });
+  calc();
+}
+
+// ---- ОСНОВНОЙ РАСЧЁТ ----
+function calc() {
+  const tbody = document.getElementById('tbody');
+  const unit = document.getElementById('unit');
+  const total = document.getElementById('total');
+  const hint = document.getElementById('hint');
+  tbody.innerHTML = ''; hint.textContent = '';
+  const type = p.value;
+
+  try {
+    if (type === 'badges') {
+      const size = document.getElementById('size').value;
+      const coat = document.getElementById('coat').value;
+      const map = badges[size][coat];
+      const qty = +document.getElementById('qty').value || 0;
+      const step = getStep(map, qty);
+      const price = map[step];
+      unit.textContent = price + ' грн';
+      total.textContent = (price * qty).toLocaleString('ru-RU') + ' грн';
+      hint.textContent = 'Прайс по ступени: ' + step + ' шт';
+      fillTable(map);
+    }
+    else if (type === 'keychains') {
+      const side = document.getElementById('side').value;
+      const size = document.getElementById('size').value;
+      const coat = document.getElementById('coat').value;
+      const map = keychains[side][size][coat];
+      const qty = +document.getElementById('qty').value || 0;
+      const step = getStep(map, qty);
+      const price = map[step];
+      unit.textContent = price + ' грн';
+      total.textContent = (price * qty).toLocaleString('ru-RU') + ' грн';
+      hint.textContent = 'Прайс по ступени: ' + step + ' шт';
+      fillTable(map);
+    }
+    else if (type === 'poly') {
+      const size = document.getElementById('size').value;
+      const map = polyPrices[size];
+      const qty = +document.getElementById('qty').value || 0;
+      const step = getStep(map, qty);
+      const price = map[step];
+      unit.textContent = price + ' грн';
+      total.textContent = (price * qty).toLocaleString('ru-RU') + ' грн';
+      hint.textContent = 'Прайс по ступени: ' + step + ' шт (тираж от 25 000 — договорная)';
+      fillTable(map);
+    }
+    else if (type === 'pvc') {
+      const qty = +document.getElementById('qty').value || 0;
+      unit.textContent = (qty >= 50 ? '295–310' : '320–350') + ' грн';
+      total.textContent = 'Диапазон';
+      hint.textContent = 'Цена зависит от сложности. Для точной цены — запрос менеджеру.';
+      tbody.innerHTML = `<tr><td>20</td><td>320–350 грн</td></tr>
+                         <tr><td>50+</td><td>295–310 грн</td></tr>`;
+    }
+    else {
+      const map = simple[type];
+      const qty = +document.getElementById('qty').value || 0;
+      const step = getStep(map, qty);
+      const price = map[step];
+      unit.textContent = price + ' грн';
+      total.textContent = (price * qty).toLocaleString('ru-RU') + ' грн';
+      hint.textContent = 'Прайс по ступени: ' + step + ' шт';
+      fillTable(map);
+    }
+  } catch (e) {
+    unit.textContent = '—';
+    total.textContent = '—';
+    hint.textContent = '⚠️ Ошибка: проверьте введённые данные';
+    console.warn(e);
+  }
+}
+
+p.addEventListener('change', buildControls);
+p.value = 'badges';
+buildControls();
+</script>
+</body>
+</html>
